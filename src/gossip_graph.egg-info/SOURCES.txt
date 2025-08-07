@@ -1,0 +1,16 @@
+README.md
+pyproject.toml
+src/gossip/__init__.py
+src/gossip/algorithm.py
+src/gossip/cli.py
+src/gossip/utils.py
+src/gossip_graph.egg-info/PKG-INFO
+src/gossip_graph.egg-info/SOURCES.txt
+src/gossip_graph.egg-info/dependency_links.txt
+src/gossip_graph.egg-info/entry_points.txt
+src/gossip_graph.egg-info/requires.txt
+src/gossip_graph.egg-info/top_level.txt
+tests/test_algorithm.py
+tests/test_hard_instances.py
+tests/test_integration.py
+tests/test_performance.py
