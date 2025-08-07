@@ -151,7 +151,47 @@ def collect_groups(selected: Sequence[str]) -> List[Tuple[str, List[Case]]]:
     return groups
 
 
+def print_usage(groups: List[str]) -> None:
+    print("\nGossip Benchmarks — grouped runner")
+    print("\nUsage:")
+    print("  ./benchmark.py [group ...] [options]\n")
+    print("Groups:")
+    print("  " + ", ".join(groups))
+    print("\nCommon options:")
+    print("  --filter SUBSTR             Filter cases by substring in case name")
+    print("  --complexity {n,m}          Fit observed scaling per group")
+    print("  --nx-timeout-ms MS          Per-case NetworkX timeout (0 to disable)")
+    print("  --nx-timeout-threshold K    If n*m <= K, run NX inline (no process)\n")
+    print("Examples:")
+    print("  ./benchmark.py                       # show this help")
+    print("  ./benchmark.py circulant             # run circulant group")
+    print("  ./benchmark.py kneser --filter K(9)  # run kneser cases matching 'K(9)'")
+    print("  ./benchmark.py er_complexity --complexity n")
+    print("  ./benchmark.py trees circulant --nx-timeout-ms 1500 --nx-timeout-threshold 5000\n")
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    # If no args provided, show help and exit
+    if argv is None and len(sys.argv) == 1:
+        groups = [
+            "basic",
+            "symmetry",
+            "families",
+            "circulant",
+            "kneser",
+            "johnson",
+            "paley",
+            "rook_shrikhande",
+            "gpetersen",
+            "trees",
+            "zeta",
+            "er_complexity",
+            "hard",
+            "all",
+        ]
+        print_usage(groups)
+        return 0
+
     parser = argparse.ArgumentParser(description="Gossip isomorphism benchmarks (modular groups)")
     parser.add_argument(
         "group",

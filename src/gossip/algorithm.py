@@ -100,7 +100,7 @@ class GossipFingerprint:
                             len(adjacency[listener])
                         ))
 
-            knowers |= next_new_knowers
+            knowers = new_knowers | next_new_knowers
             new_knowers = next_new_knowers
             iteration += 1
 
