@@ -1,248 +1,220 @@
 #!/usr/bin/env python3
 """
-Benchmark runner for graph isomorphism tests.
+Curated benchmark runner for the gossip graph isomorphism algorithm.
+
+Goals:
+- Readable, concise per-test output with clear mismatches
+- Grouped runs (basic, symmetry, circulant, products, hard, families, kneser, johnson, paley, rook_shrikhande, gpetersen, performance, all)
+- Side-by-side comparison with NetworkX for every test
+- Final performance summary with theoretical O(n*m) and measured stats
 """
 
+from __future__ import annotations
+
 import sys
-import subprocess
 import argparse
-from typing import List, Tuple
+import pathlib
+from typing import List, Optional, Sequence, Tuple
+
+# Ensure local imports work without installation
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+# Local benchmarks package
+BENCH_DIR = PROJECT_ROOT / "benchmarks"
+if str(BENCH_DIR) not in sys.path:
+    sys.path.insert(0, str(BENCH_DIR))
+
+from benchmarks.common import (
+    Case,
+    Result,
+    run_cases,
+    summarize,
+    print_group_table,
+    report_complexity,
+)
+
+# Import group builders
+from benchmarks.families import build_cases as build_families
+from benchmarks.circulant import build_cases as build_circulant
+from benchmarks.other_families import (
+    build_kneser_cases,
+    build_johnson_cases,
+    build_paley_cases,
+    build_rook_shrikhande_cases,
+    build_gpetersen_cases,
+)
+from benchmarks.trees import build_cases as build_trees
+from benchmarks.zeta import build_cases as build_zeta
+from benchmarks.er_complexity import build_cases as build_er_complexity
+
+import networkx as nx
+from gossip.utils import relabel_graph, generate_cfi_pair, generate_miyazaki_graph, generate_strongly_regular_graph
 
 
-def run_command(cmd: List[str], quiet: bool = True) -> Tuple[int, str, str]:
-    """Run a command and return exit code, stdout, and stderr."""
-    if quiet:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return result.returncode, result.stdout, result.stderr
+def build_basic_cases() -> List[Case]:
+    cases: List[Case] = []
+    basics = [
+        ("Triangle", nx.cycle_graph(3)),
+        ("Path (n=6)", nx.path_graph(6)),
+        ("Cycle (n=10)", nx.cycle_graph(10)),
+        ("Star (n=9)", nx.star_graph(8)),
+        ("Complete K6", nx.complete_graph(6)),
+        ("Grid 5×5", nx.grid_2d_graph(5, 5)),
+        ("Random Tree (n=15)", nx.random_labeled_tree(15, seed=1)),
+        ("Hypercube Q3", nx.hypercube_graph(3)),
+        ("Wheel (n=10)", nx.wheel_graph(10)),
+    ]
+    for name, G in basics:
+        cases.append(Case("basic", f"{name} — relabel", G, relabel_graph(G, seed=42), True))
+
+    cases.extend(
+        [
+            Case("basic", "Cycle (10) vs Path (10)", nx.cycle_graph(10), nx.path_graph(10), False),
+            Case("basic", "Star (11) vs Wheel (11)", nx.star_graph(10), nx.wheel_graph(10), False),
+            Case("basic", "Petersen vs 3-regular(n=10)", nx.petersen_graph(), nx.random_regular_graph(3, 10, seed=2), False),
+        ]
+    )
+    return cases
+
+
+def build_symmetry_cases() -> List[Case]:
+    cases: List[Case] = []
+    for gen_name, disp in [
+        ("petersen_graph", "Petersen"),
+        ("dodecahedral_graph", "Dodecahedral"),
+        ("desargues_graph", "Desargues"),
+        ("heawood_graph", "Heawood"),
+        ("moebius_kantor_graph", "Möbius–Kantor"),
+        ("pappus_graph", "Pappus"),
+    ]:
+        if hasattr(nx, gen_name):
+            G = getattr(nx, gen_name)()
+            cases.append(Case("symmetry", f"{disp} — relabel", G, relabel_graph(G, seed=7), True))
+    if hasattr(nx, "petersen_graph"):
+        G = nx.petersen_graph()
+        cases.append(Case("symmetry", "Petersen vs Complement", G, nx.complement(G), False))
+    return cases
+
+
+def build_hard_cases() -> List[Case]:
+    cases: List[Case] = []
+    for n in [6, 8]:
+        base = nx.cycle_graph(n)
+        G1, G2 = generate_cfi_pair(base)
+        cases.append(Case("hard", f"CFI (cycle {n})", G1, G2, False))
+    srg = generate_strongly_regular_graph(16, 6, 2, 2)
+    if srg is not None:
+        cases.append(Case("hard", "SRG(16,6,2,2) — relabel", srg, relabel_graph(srg, seed=11), True))
+    for n in [6, 8, 10]:
+        G = generate_miyazaki_graph(n)
+        cases.append(Case("hard", f"Miyazaki (n={n}) — relabel", G, relabel_graph(G, seed=5), True))
+    # Cospectral trees from tests
+    T1 = nx.Graph([(0, 1), (0, 2), (0, 3), (1, 4), (1, 5)])
+    T2 = nx.Graph([(0, 1), (0, 2), (1, 3), (1, 4), (2, 5)])
+    cases.append(Case("hard", "Cospectral Trees (n=6)", T1, T2, False))
+    # Random regular pairs
+    for d in [3, 4]:
+        for n in [12, 16]:
+            if (n * d) % 2 == 0:
+                cases.append(Case("hard", f"Random {d}-regular (n={n})", nx.random_regular_graph(d, n, seed=n + d), nx.random_regular_graph(d, n, seed=n + d + 1), None))
+    return cases
+
+
+def collect_groups(selected: Sequence[str]) -> List[Tuple[str, List[Case]]]:
+    builders = {
+        "basic": build_basic_cases,
+        "symmetry": build_symmetry_cases,
+        "families": build_families,
+        "circulant": build_circulant,
+        "kneser": build_kneser_cases,
+        "johnson": build_johnson_cases,
+        "paley": build_paley_cases,
+        "rook_shrikhande": build_rook_shrikhande_cases,
+        "gpetersen": build_gpetersen_cases,
+        "trees": build_trees,
+        "zeta": build_zeta,
+        "er_complexity": build_er_complexity,
+        "hard": build_hard_cases,
+    }
+    if not selected:
+        names = list(builders.keys())
+    elif "all" in selected:
+        names = list(builders.keys())
     else:
-        result = subprocess.run(cmd)
-        return result.returncode, "", ""
+        names = [n for n in builders.keys() if n in set(selected)]
+    groups: List[Tuple[str, List[Case]]] = []
+    for name in names:
+        groups.append((name, builders[name]()))
+    return groups
 
 
-def parse_pytest_output(stdout: str) -> Tuple[int, int, int]:
-    """Parse pytest output to extract passed/failed/skipped counts."""
-    import re
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Gossip isomorphism benchmarks (modular groups)")
+    parser.add_argument(
+        "group",
+        nargs="*",
+        choices=[
+            "basic",
+            "symmetry",
+            "families",
+            "circulant",
+            "kneser",
+            "johnson",
+            "paley",
+            "rook_shrikhande",
+            "gpetersen",
+            "trees",
+            "zeta",
+            "er_complexity",
+            "hard",
+            "all",
+        ],
+        help="Groups to run (default: all)",
+    )
+    parser.add_argument("--filter", default=None, help="Substring to filter case names")
+    parser.add_argument("--complexity", choices=["n", "m"], default=None, help="Report observed scaling vs n or m per group")
+    parser.add_argument("--nx-timeout-ms", type=int, default=3000, help="Timeout in ms for NetworkX isomorphism per case (0 to disable)")
+    parser.add_argument("--nx-timeout-threshold", type=int, default=3000, help="If n*m <= threshold, run NX inline to avoid process overhead")
 
-    # Count dots and F's in the progress line
-    passed = failed = skipped = 0
+    args = parser.parse_args(argv)
 
-    # Look for the progress line with dots and F's
-    for line in stdout.split('\n'):
-        if line.strip() and (line[0] in '.FEsx' or line.strip()[0] in '.FEsx'):
-            # Count characters
-            passed = line.count('.')
-            failed = line.count('F') + line.count('E')
-            skipped = line.count('s')
-            if passed or failed or skipped:
-                return passed, failed, skipped
+    groups = collect_groups(args.group or ["all"])
+    all_results: List[Result] = []
 
-    # Fallback: look for summary line
-    for line in stdout.split('\n'):
-        if ' passed' in line or ' failed' in line:
-            passed_match = re.search(r'(\d+) passed', line)
-            failed_match = re.search(r'(\d+) failed', line)
-            skipped_match = re.search(r'(\d+) skipped', line)
+    print("\n============================================================")
+    print("Gossip Graph Isomorphism Benchmarks")
+    print("============================================================")
+    print(" Comparing Gossip vs NetworkX per test (times in ms).\n")
 
-            if passed_match:
-                passed = int(passed_match.group(1))
-            if failed_match:
-                failed = int(failed_match.group(1))
-            if skipped_match:
-                skipped = int(skipped_match.group(1))
+    for group_name, cases in groups:
+        if args.filter:
+            cases = [c for c in cases if args.filter.lower() in c.name.lower()]
+        if not cases:
+            continue
+        group_results = run_cases(cases, nx_timeout_ms=args.nx_timeout_ms, nx_timeout_threshold=args.nx_timeout_threshold)
+        print_group_table(group_name, group_results)
+        correct, total, avg_tg, avg_tn, avg_sp = summarize(group_results)
+        print(f" -> Summary: {correct}/{total} correct | avg gossip {avg_tg:.2f}ms | avg nx {avg_tn:.2f}ms | avg speedup x{avg_sp:.1f}")
+        if args.complexity:
+            report_complexity(group_results, size=args.complexity)
+        all_results.extend(group_results)
 
-            if passed_match or failed_match:
-                return passed, failed, skipped
-
-    return passed, failed, skipped
-
-
-def run_basic():
-    """Run basic algorithm tests."""
-    print("Running basic tests...")
-
-    cmd = ["python", "-m", "pytest",
-           "tests/test_algorithm.py",
-           "-q", "--tb=no"]
-
-    returncode, stdout, stderr = run_command(cmd)
-
-    passed, failed, skipped = parse_pytest_output(stdout)
-
-    if returncode == 0 and passed > 0:
-        print(f"  ✓ {passed} tests passed")
-    elif failed > 0:
-        print(f"  ✗ {failed} tests failed, {passed} passed")
-    else:
-        print(f"  ⚠ No tests found or error running tests")
-
-    return returncode == 0
-
-
-def run_performance():
-    """Run performance comparison tests."""
-    print("Running performance tests...")
-
-    cmd = ["python", "-m", "pytest",
-           "tests/test_performance.py",
-           "-q", "--tb=no"]
-
-    returncode, stdout, stderr = run_command(cmd)
-
-    passed, failed, _ = parse_pytest_output(stdout)
-
-    if returncode == 0 and passed > 0:
-        print(f"  ✓ {passed} tests passed")
-    elif failed > 0:
-        print(f"  ✗ {failed} tests failed, {passed} passed")
-    else:
-        print(f"  ⚠ No performance tests found")
-
-    return returncode == 0
-
-
-def run_hard():
-    """Run hard instance tests."""
-    print("Running hard instance tests...")
-
-    cmd = ["python", "-m", "pytest",
-           "tests/test_hard_instances.py",
-           "-q", "--tb=no"]
-
-    returncode, stdout, stderr = run_command(cmd)
-
-    passed, failed, _ = parse_pytest_output(stdout)
-
-    if returncode == 0 and passed > 0:
-        print(f"  ✓ {passed} tests passed")
-    elif failed > 0:
-        print(f"  ✗ {failed} tests failed, {passed} passed")
-    else:
-        print(f"  ⚠ No hard instance tests found")
-
-    return returncode == 0
-
-
-def run_showcase(verbose: bool = False):
-    """Run showcase demonstrations."""
-    print("Running showcase demonstrations...")
-
-    if verbose:
-        cmd = ["python", "-m", "pytest",
-               "tests/test_showcase.py",
-               "-xvs", "--tb=no"]
-        run_command(cmd, quiet=False)
-    else:
-        cmd = ["python", "-m", "pytest",
-               "tests/test_showcase.py",
-               "-q", "--tb=no"]
-
-        returncode, stdout, stderr = run_command(cmd)
-
-        passed, failed, _ = parse_pytest_output(stdout)
-
-        if returncode == 0 and passed > 0:
-            print(f"  ✓ {passed} tests passed")
-        elif failed > 0:
-            print(f"  ✗ {failed} tests failed, {passed} passed")
-        else:
-            print(f"  ⚠ No showcase tests found")
-
-    return True
-
-
-def run_all(debug: bool = False, coverage: bool = False):
-    """Run all tests."""
-    print("Running all tests...")
-
-    cmd = ["python", "-m", "pytest", "tests/"]
-
-    if debug:
-        cmd.extend(["-v", "--tb=short"])
-    else:
-        cmd.extend(["-q", "--tb=no"])
-
-    if coverage:
-        cmd.extend(["--cov=src/gossip", "--cov-report=term-missing:skip-covered"])
-
-    returncode, stdout, stderr = run_command(cmd, quiet=not debug)
-
-    if not debug:
-        passed, failed, skipped = parse_pytest_output(stdout)
-        total = passed + failed + skipped
-        if total > 0:
-            if failed == 0:
-                print(f"  ✓ All {passed} tests passed")
-            else:
-                print(f"  ✗ {failed} failed, {passed} passed")
-                if skipped > 0:
-                    print(f"    ({skipped} skipped)")
-        else:
-            print("  ⚠ No tests found")
-
-    return returncode == 0
-
-
-def show_commands():
-    """Show available commands."""
-    print("""
-Graph Benchmark Runner - Available Commands:
-
-  basic      Run basic algorithm tests
-  perf       Run performance comparison tests
-  hard       Run hard instance tests
-  showcase   Run showcase demonstrations
-  all        Run all tests
-
-Options:
-  --debug    Show detailed test output
-  --coverage Show code coverage report
-  --verbose  Show verbose output (for showcase)
-
-Examples:
-  ./benchmark.py              # Show this help
-  ./benchmark.py basic        # Run basic tests
-  ./benchmark.py all          # Run all tests
-  ./benchmark.py all --debug  # Run all with details
-""")
-
-
-def main():
-    """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Graph isomorphism benchmark runner",
-        add_help=False
+    # Final performance report
+    print("\n============================================================")
+    print("Final Performance Report")
+    print("============================================================")
+    correct, total, avg_tg, avg_tn, avg_sp = summarize(all_results)
+    print(f" -> Summary: {correct}/{total} correct | avg gossip {avg_tg:.2f}ms | avg nx {avg_tn:.2f}ms | avg speedup x{avg_sp:.1f}")
+    print(
+        "\nTheoretical complexity (claimed): time O(n*m), space O(n*m).\n"
+        "This is a hobby project; results above are empirical and small-scale."
     )
 
-    parser.add_argument("command", nargs="?", default=None,
-                       choices=["basic", "perf", "hard", "showcase", "all"],
-                       help="Test command to run")
-    parser.add_argument("--debug", action="store_true",
-                       help="Show detailed output")
-    parser.add_argument("--coverage", action="store_true",
-                       help="Include coverage report")
-    parser.add_argument("--verbose", action="store_true",
-                       help="Verbose output for showcase")
-
-    args = parser.parse_args()
-
-    if args.command is None:
-        show_commands()
-        return 0
-
-    success = True
-
-    if args.command == "basic":
-        success = run_basic()
-    elif args.command == "perf":
-        success = run_performance()
-    elif args.command == "hard":
-        success = run_hard()
-    elif args.command == "showcase":
-        success = run_showcase(verbose=args.verbose)
-    elif args.command == "all":
-        success = run_all(debug=args.debug, coverage=args.coverage)
-
-    return 0 if success else 1
+    mismatches = [r for r in all_results if not r.correct]
+    return 1 if mismatches else 0
 
 
 if __name__ == "__main__":
