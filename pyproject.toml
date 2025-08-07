@@ -64,18 +64,17 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "-ra",
+    "-q",
     "--strict-markers",
-    "--cov=src/gossip",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
     "--timeout=30",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "showcase: marks tests as showcase demonstrations",
+    "benchmark: marks tests as performance benchmarks",
+    "hard_instance: marks tests for hard graph instances",
 ]
 
 [tool.coverage.run]
