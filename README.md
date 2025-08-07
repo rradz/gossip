@@ -12,7 +12,7 @@ The gossip algorithm propagates local information outward ("gossip") from each v
 - Works on simple undirected graphs (self-loops are tolerated by reducing to a simple graph)
 - Not guaranteed complete; we document known counterexamples
 
-## Current Status (facts, not claims)
+## Current Status
 
 ### What Works Reliably (in current tests)
 - CFI graphs: non-isomorphic pairs are distinguished
