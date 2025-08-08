@@ -85,24 +85,62 @@ class GossipFingerprint:
                         gossip_heard_count[current_spreader] += 1
                     gossip_heard_count[neighbor] += 1
 
-            # Emit events using hear counts (no degrees)
+            # Frontier-shape sentinel: sorted component sizes in G[F_t]
+            # Build DSU on frontier vertices and union while iterating edges above
+            frontier = new_spreaders
+            if frontier:
+                parent: Dict[Any, Any] = {v: v for v in frontier}
+                rank: Dict[Any, int] = {v: 0 for v in frontier}
+
+                def _find(x: Any) -> Any:
+                    while parent[x] != x:
+                        parent[x] = parent[parent[x]]
+                        x = parent[x]
+                    return x
+
+                def _union(x: Any, y: Any) -> None:
+                    rx, ry = _find(x), _find(y)
+                    if rx == ry:
+                        return
+                    if rank[rx] < rank[ry]:
+                        parent[rx] = ry
+                    elif rank[rx] > rank[ry]:
+                        parent[ry] = rx
+                    else:
+                        parent[ry] = rx
+                        rank[rx] += 1
+
+                for u, v in gossips:
+                    if u in frontier and v in frontier:
+                        _union(u, v)
+
+                # Compute sorted component sizes vector
+                comp_sizes: Dict[Any, int] = {}
+                for v in frontier:
+                    r = _find(v)
+                    comp_sizes[r] = comp_sizes.get(r, 0) + 1
+                sizes_sorted = tuple(sorted(comp_sizes.values()))
+                num_groups = len(sizes_sorted)
+                timeline.append((iteration, -1, sizes_sorted))
+
+            # Emit events using hear counts; include current number of frontier groups
             for u, v in gossips:
                 u_is_spreader = u in spreaders
                 v_is_spreader = v in spreaders
 
                 if u_is_spreader and not v_is_spreader:
-                    timeline.append((iteration, 1, gossip_heard_count[u], gossip_heard_count[v]))
+                    timeline.append((iteration, 1, gossip_heard_count[u], gossip_heard_count[v], num_groups))
                     receivers.add(v)
                 elif v_is_spreader and not u_is_spreader:
-                    timeline.append((iteration, 1, gossip_heard_count[v], gossip_heard_count[u]))
+                    timeline.append((iteration, 1, gossip_heard_count[v], gossip_heard_count[u], num_groups))
                     receivers.add(u)
                 else:
                     a = gossip_heard_count[u]
                     b = gossip_heard_count[v]
                     if a <= b:
-                        timeline.append((iteration, 0, a, b))
+                        timeline.append((iteration, 0, a, b, num_groups))
                     else:
-                        timeline.append((iteration, 0, b, a))
+                        timeline.append((iteration, 0, b, a, num_groups))
 
             # spreaders is cumulative set of all vertices that have ever heard the gossip
             spreaders = spreaders | receivers

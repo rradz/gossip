@@ -10,7 +10,7 @@ The gossip algorithm propagates local information outward ("gossip") from each v
 
 - Deterministic and label-invariant
 - Works on simple undirected graphs (self-loops are tolerated by reducing to a simple graph)
- - Not proven complete; known issue: Rook R(4,4) vs Shrikhande — a classical non-isomorphic pair. Our algorithm incorrectly labels them as isomorphic. Work is incomplete until addressed. Circulants fixed.
+ - Not proven complete; known issue: Rook R(4,4) vs Shrikhande — a classical non-isomorphic pair. Our algorithm incorrectly labels them as isomorphic. We addressed this by adding a per-round sentinel that records how many connected groups are currently discussing the gossip (number of connected components in the frontier). This feels a bit hacky, but is effective and preserves the flow model. Circulants fixed.
 
 ## Core idea
 
@@ -26,6 +26,7 @@ Graph structure can be uniquely captured by how information spreads through it. 
     - For each gossip (u, v):
       - If exactly one endpoint is in `spreaders`, emit `(iteration, 1, gossip_heard_count[spreader], gossip_heard_count[receiver])` and add the receiver to `receivers`.
       - Else (both already heard), emit a neutral event `(iteration, 0, min_count, max_count)`.
+    - Append one sentinel event `(iteration, -1, group_sizes)` where `group_sizes` is the sorted vector of connected-component sizes in the frontier-induced subgraph. Intuition: how many independent conversations and how large they are.
     - Update `spreaders ← spreaders ∪ receivers`, `new_spreaders ← receivers`, and increment `iteration`.
   - Sort `timeline` and store it as the fingerprint for s.
 - The graph fingerprint is the sorted multiset of all per-vertex timelines. Two graphs match if these multisets are identical.
