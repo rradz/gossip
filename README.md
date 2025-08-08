@@ -10,7 +10,7 @@ The gossip algorithm propagates local information outward ("gossip") from each v
 
 - Deterministic and label-invariant
 - Works on simple undirected graphs (self-loops are tolerated by reducing to a simple graph)
- - Not proven complete; currently no known counterexamples in our tests/benchmarks (circulants fixed)
+ - Not proven complete; known issue: Rook R(4,4) vs Shrikhande — a classical non-isomorphic pair. Our algorithm incorrectly labels them as isomorphic. Work is incomplete until addressed. Circulants fixed.
 
 ## Core idea
 
@@ -46,11 +46,16 @@ Notes:
 - Miyazaki graphs: relabel stability
 - Generalized Petersen (various GP(n,k)) relabel stability
 - Circulants: previously failing pairs now distinguished
-- Kneser and Johnson (moderate sizes); Paley; Rook vs Shrikhande sanity
+- Kneser and Johnson (moderate sizes); Paley
 - Cospectral tree pairs; grid/ladder/prism/circular ladder; barbell/lollipop/friendship
 
 ### Known Issues
+ - Rook R(4,4) vs Shrikhande (both SRG(16,6,2,2)): a known non-isomorphic pair; the algorithm incorrectly labels them as isomorphic
 - Dense graphs: runtime grows faster (expected; more edges)
+
+Notes on the Rook–Shrikhande case:
+- Distinguishing between a frontier-induced C6 and two disjoint C3’s (2×K3) appears hard for the current edge-event fingerprint. Each neighbor “talks to two” and six conversations happen either way, making per-vertex timelines coincide.
+- It is under consideration whether this is a triangle-specific corner case (C3 is the only graph that is both a clique and a cycle) or an indicator of a broader structural gap. Further design work is ongoing.
 
 ## Requirements
 
