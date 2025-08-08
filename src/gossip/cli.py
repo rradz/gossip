@@ -155,6 +155,16 @@ def compare_graphs_cli(
 
         if gossip_match != nx_iso:
             print("\nWARNING: Gossip result differs from NetworkX!")
+            # Print per-vertex fingerprints to aid debugging
+            gf_dbg = GossipFingerprint()
+            fp1 = gf_dbg.compute_raw_fingerprints(graph1)
+            fp2 = gf_dbg.compute_raw_fingerprints(graph2)
+            print("\nPer-vertex fingerprints (Graph 1):")
+            for v in sorted(graph1.nodes()):
+                print(f"  {v}: {fp1[v]}")
+            print("\nPer-vertex fingerprints (Graph 2):")
+            for v in sorted(graph2.nodes()):
+                print(f"  {v}: {fp2[v]}")
 
     return gossip_match, nx_iso, gossip_time
 
@@ -203,6 +213,56 @@ def generate_test_graphs(
         G1 = generate_miyazaki_graph(size)
         G2 = relabel_graph(G1, seed=42)
         return G1, G2
+
+    elif graph_type == "rook_shrikhande":
+        # Build 4x4 rook's graph
+        if hasattr(nx, "rooks_graph"):
+            R = nx.rooks_graph(4, 4)
+        else:
+            R = nx.Graph()
+            for i in range(4):
+                for j in range(4):
+                    for jj in range(4):
+                        if jj != j:
+                            R.add_edge((i, j), (i, jj))
+                    for ii in range(4):
+                        if ii != i:
+                            R.add_edge((i, j), (ii, j))
+        # Build Shrikhande
+        if hasattr(nx, "shrikhande_graph"):
+            S = nx.shrikhande_graph()
+        else:
+            S = nx.Graph()
+            for x in range(4):
+                for y in range(4):
+                    S.add_node((x, y))
+            conn = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1)]
+            for x in range(4):
+                for y in range(4):
+                    for dx, dy in conn:
+                        nx2 = (x + dx) % 4
+                        ny2 = (y + dy) % 4
+                        S.add_edge((x, y), (nx2, ny2))
+        return R, S
+
+    elif graph_type == "shrikhande_torus":
+        # Shrikhande vs torus C4□C4
+        if hasattr(nx, "shrikhande_graph"):
+            S = nx.shrikhande_graph()
+        else:
+            S = nx.Graph()
+            for x in range(4):
+                for y in range(4):
+                    S.add_node((x, y))
+            conn = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1)]
+            for x in range(4):
+                for y in range(4):
+                    for dx, dy in conn:
+                        nx2 = (x + dx) % 4
+                        ny2 = (y + dy) % 4
+                        S.add_edge((x, y), (nx2, ny2))
+        T = nx.cartesian_product(nx.cycle_graph(4), nx.cycle_graph(4))
+        return S, T
 
     elif graph_type == "random":
         p = kwargs.get("probability", 0.3)
@@ -255,7 +315,7 @@ Examples:
     test_parser = subparsers.add_parser("test", help="Test with generated graphs")
     test_parser.add_argument(
         "--type", default="random",
-        choices=["regular", "cfi", "srg", "circulant", "miyazaki", "random"],
+        choices=["regular", "cfi", "srg", "circulant", "miyazaki", "rook_shrikhande", "shrikhande_torus", "random"],
         help="Type of test graphs to generate"
     )
     test_parser.add_argument(
@@ -275,7 +335,7 @@ Examples:
     gen_parser = subparsers.add_parser("generate", help="Generate test graphs")
     gen_parser.add_argument(
         "--type", default="random",
-        choices=["regular", "cfi", "srg", "circulant", "miyazaki", "random"],
+        choices=["regular", "cfi", "srg", "circulant", "miyazaki", "rook_shrikhande", "shrikhande_torus", "random"],
         help="Type of graphs to generate"
     )
     gen_parser.add_argument(

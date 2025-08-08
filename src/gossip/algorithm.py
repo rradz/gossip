@@ -64,13 +64,15 @@ class GossipFingerprint:
         timeline = []
         iteration = 0
 
+        # Global gossip-heard counts from the start (no per-round reset)
+        gossip_heard_count = {v: 0 for v in adjacency}
+
         while new_spreaders:
             # Receivers are vertices that newly receive the gossip in this iteration
             receivers = set()
 
-            # Collect gossip transmissions and per-vertex hear counts in a single pass
+            # Collect gossip transmissions and update global hear counts in a single pass
             gossips = []
-            gossip_heard_count = {}
             for current_spreader in new_spreaders:
                 for neighbor in adjacency[current_spreader]:
                     edge = tuple(sorted((current_spreader, neighbor)))
@@ -78,10 +80,10 @@ class GossipFingerprint:
                         continue
                     seen_edges.add(edge)
                     gossips.append((current_spreader, neighbor))
-                    gossip_heard_count[current_spreader] = gossip_heard_count.get(current_spreader, 0)
+                    # Receiver hears once; spreader only bumps if contacting someone who already heard
                     if neighbor in spreaders:
                         gossip_heard_count[current_spreader] += 1
-                    gossip_heard_count[neighbor] = gossip_heard_count.get(neighbor, 0) + 1
+                    gossip_heard_count[neighbor] += 1
 
             # Emit events using hear counts (no degrees)
             for u, v in gossips:
@@ -109,6 +111,18 @@ class GossipFingerprint:
             iteration += 1
 
         return tuple(sorted(timeline))
+
+    def compute_raw_fingerprints(self, G: nx.Graph) -> Dict[Any, Tuple[Tuple, ...]]:
+        """
+        Compute per-vertex raw fingerprints for all start vertices.
+
+        Returns a mapping from start vertex to its sorted timeline of events.
+        """
+        adjacency = {v: list(G.neighbors(v)) for v in G.nodes()}
+        per_vertex: Dict[Any, Tuple[Tuple, ...]] = {}
+        for v in adjacency:
+            per_vertex[v] = self._compute_vertex_fingerprint(adjacency, v)
+        return per_vertex
 
     def compare(self, G1: nx.Graph, G2: nx.Graph) -> bool:
         """
