@@ -55,53 +55,57 @@ class GossipFingerprint:
             start_vertex: Vertex to start gossip from
 
         Returns:
-            Tuple of (degree, sorted timeline of gossip events)
+            Sorted timeline of gossip events for the start vertex
         """
-        knowers = {start_vertex}
-        new_knowers = {start_vertex}
+        # Spreaders are vertices that currently possess the gossip and may spread it
+        spreaders = {start_vertex}
+        new_spreaders = {start_vertex}
         seen_edges = set()
         timeline = []
         iteration = 0
 
-        while new_knowers:
-            next_new_knowers = set()
+        while new_spreaders:
+            # Receivers are vertices that newly receive the gossip in this iteration
+            receivers = set()
 
-            # Collect transmissions and hit counts in a single pass
-            transmissions = []
-            hit_rate = {}
-            for current_knower in knowers:
-                for neighbor in adjacency[current_knower]:
-                    edge = tuple(sorted((current_knower, neighbor)))
+            # Collect gossip transmissions and per-vertex hear counts in a single pass
+            gossips = []
+            gossip_heard_count = {}
+            for current_spreader in new_spreaders:
+                for neighbor in adjacency[current_spreader]:
+                    edge = tuple(sorted((current_spreader, neighbor)))
                     if edge in seen_edges:
                         continue
                     seen_edges.add(edge)
-                    transmissions.append((current_knower, neighbor))
-                    hit_rate[current_knower] = hit_rate.get(current_knower, 0)
-                    if neighbor in knowers:
-                        hit_rate[current_knower] += 1
-                    hit_rate[neighbor] = hit_rate.get(neighbor, 0) + 1
+                    gossips.append((current_spreader, neighbor))
+                    gossip_heard_count[current_spreader] = gossip_heard_count.get(current_spreader, 0)
+                    if neighbor in spreaders:
+                        gossip_heard_count[current_spreader] += 1
+                    gossip_heard_count[neighbor] = gossip_heard_count.get(neighbor, 0) + 1
 
-            # Emit events using hit rates (no degrees)
-            for current_knower, neighbor in transmissions:
-                current_knows = current_knower in knowers
-                neighbor_knows = neighbor in knowers
+            # Emit events using hear counts (no degrees)
+            for u, v in gossips:
+                u_is_spreader = u in spreaders
+                v_is_spreader = v in spreaders
 
-                if current_knows and not neighbor_knows:
-                    timeline.append((iteration, 1, hit_rate[current_knower], hit_rate[neighbor]))
-                    next_new_knowers.add(neighbor)
-                elif neighbor_knows and not current_knows:
-                    timeline.append((iteration, 1, hit_rate[neighbor], hit_rate[current_knower]))
-                    next_new_knowers.add(current_knower)
+                if u_is_spreader and not v_is_spreader:
+                    timeline.append((iteration, 1, gossip_heard_count[u], gossip_heard_count[v]))
+                    receivers.add(v)
+                elif v_is_spreader and not u_is_spreader:
+                    timeline.append((iteration, 1, gossip_heard_count[v], gossip_heard_count[u]))
+                    receivers.add(u)
                 else:
-                    a = hit_rate[current_knower]
-                    b = hit_rate[neighbor]
+                    a = gossip_heard_count[u]
+                    b = gossip_heard_count[v]
                     if a <= b:
                         timeline.append((iteration, 0, a, b))
                     else:
                         timeline.append((iteration, 0, b, a))
 
-            knowers = new_knowers | next_new_knowers
-            new_knowers = next_new_knowers
+            # spreaders is cumulative set of all vertices that have ever heard the gossip
+            spreaders = spreaders | receivers
+            # only newly informed vertices spread in the next iteration
+            new_spreaders = receivers
             iteration += 1
 
         return tuple(sorted(timeline))
