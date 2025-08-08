@@ -77,7 +77,7 @@ def build_johnson_cases() -> List[Case]:
 
 def build_paley_cases() -> List[Case]:
     cases: List[Case] = []
-    for q in [5, 13, 17, 29]:
+    for q in [5, 9, 13, 17, 29]:
         G = build_paley(q)
         if G is not None:
             cases.append(Case("paley", f"Paley P({q}) — relabel", G, relabel_graph(G, seed=q), True))
@@ -86,11 +86,10 @@ def build_paley_cases() -> List[Case]:
 
 def build_rook_shrikhande_cases() -> List[Case]:
     cases: List[Case] = []
-    R = None
+    # Build 4x4 rook's graph (grid graph with rook moves)
     if hasattr(nx, "rooks_graph"):
         R = nx.rooks_graph(4, 4)
     else:
-        # Fallback: construct rook's move graph on 4x4 board
         R = nx.Graph()
         for i in range(4):
             for j in range(4):
@@ -100,11 +99,28 @@ def build_rook_shrikhande_cases() -> List[Case]:
                 for ii in range(4):
                     if ii != i:
                         R.add_edge((i, j), (ii, j))
-    S = nx.shrikhande_graph() if hasattr(nx, "shrikhande_graph") else None
-    if R is not None and S is not None:
-        cases.append(Case("rook_shrikhande", "Rook R(4,4) vs Shrikhande", R, S, False))
-        cases.append(Case("rook_shrikhande", "Rook R(4,4) — relabel", R, relabel_graph(R, seed=44), True))
-        cases.append(Case("rook_shrikhande", "Shrikhande — relabel", S, relabel_graph(S, seed=16), True))
+    # Build Shrikhande graph (16,6,2,2)
+    if hasattr(nx, "shrikhande_graph"):
+        S = nx.shrikhande_graph()
+    else:
+        # Cayley graph on Z4 x Z4 with connection set {(±1,0), (0,±1), (1,1), (-1,-1)}
+        S = nx.Graph()
+        for x in range(4):
+            for y in range(4):
+                S.add_node((x, y))
+        conn = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1)]
+        for x in range(4):
+            for y in range(4):
+                for dx, dy in conn:
+                    nx2 = (x + dx) % 4
+                    ny2 = (y + dy) % 4
+                    S.add_edge((x, y), (nx2, ny2))
+    cases.append(Case("rook_shrikhande", "Rook R(4,4) vs Shrikhande", R, S, False))
+    cases.append(Case("rook_shrikhande", "Rook R(4,4) — relabel", R, relabel_graph(R, seed=44), True))
+    cases.append(Case("rook_shrikhande", "Shrikhande — relabel", S, relabel_graph(S, seed=16), True))
+    # Shrikhande vs Lattice (torus C4□C4) — known non-isomorphic strongly regular graphs
+    T = nx.cartesian_product(nx.cycle_graph(4), nx.cycle_graph(4))
+    cases.append(Case("rook_shrikhande", "Shrikhande vs Torus C4□C4", S, T, False))
     return cases
 
 
@@ -120,6 +136,7 @@ def build_gpetersen_cases() -> List[Case]:
                 Case("gpetersen", "GP(10,2) vs GP(10,3)", nx.generalized_petersen_graph(10, 2), nx.generalized_petersen_graph(10, 3), False),
                 Case("gpetersen", "GP(12,5) vs GP(12,4)", nx.generalized_petersen_graph(12, 5), nx.generalized_petersen_graph(12, 4), False),
                 Case("gpetersen", "GP(14,3) vs GP(14,5)", nx.generalized_petersen_graph(14, 3), nx.generalized_petersen_graph(14, 5), False),
+                Case("gpetersen", "Petersen vs Dodecahedral", nx.petersen_graph(), nx.generalized_petersen_graph(10, 2), False),
             ]
         )
     return cases

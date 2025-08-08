@@ -14,24 +14,27 @@ The gossip algorithm propagates local information outward ("gossip") from each v
 
 ## Core idea
 
-Graph structure can be uniquely captured by how information spreads through it. By watching when edges transmit new information and with what local “pressure” (neighbor hit counts), we get time-ordered edge-event signatures that are highly discriminative.
+Graph structure can be uniquely captured by how information spreads through it. By watching when edges transmit new information and with what local “pressure” (how many times a vertex hears gossip in a round), we get time-ordered edge-event signatures that are highly discriminative.
 
 ## How the gossip algorithm works (line by line)
 
 - For each start vertex s:
-  - Initialize `knowers = {s}`, `new_knowers = {s}`, `seen_edges = ∅`, `timeline = []`, and `iteration = 0`.
-  - While `new_knowers` is non-empty:
-    - Build a single-pass list of edge transmissions from all current `knowers` to their neighbors, skipping edges already in `seen_edges`.
-    - Compute a per-vertex `hit_rate` that counts how often each endpoint is “touched” this iteration (including contacts inside the current frontier).
-    - For each transmission (u, v):
-      - If exactly one endpoint knows, emit an event `(iteration, 1, hits_knower, hits_receiver)` and add the receiver to `next_new_knowers`.
-      - Else (both know or both don’t yet know), emit a neutral event `(iteration, 0, min_hits, max_hits)`.
-    - Update `knowers ← knowers ∪ next_new_knowers`, `new_knowers ← next_new_knowers`, and increment `iteration`.
+  - Initialize sets: `spreaders = {s}` (all who have heard), `new_spreaders = {s}` (frontier), plus `seen_edges = ∅`, `timeline = []`, and `iteration = 0`.
+  - While `new_spreaders` is non-empty:
+    - Compile this round’s list of edge gossips from each `current_spreader ∈ new_spreaders` to its neighbors, skipping edges in `seen_edges`.
+    - Tally `gossip_heard_count[v]` for every vertex v in the round (how many times v heard gossip this iteration, including intra-frontier touches).
+    - For each gossip (u, v):
+      - If exactly one endpoint is in `spreaders`, emit `(iteration, 1, gossip_heard_count[spreader], gossip_heard_count[receiver])` and add the receiver to `receivers`.
+      - Else (both already heard), emit a neutral event `(iteration, 0, min_count, max_count)`.
+    - Update `spreaders ← spreaders ∪ receivers`, `new_spreaders ← receivers`, and increment `iteration`.
   - Sort `timeline` and store it as the fingerprint for s.
 - The graph fingerprint is the sorted multiset of all per-vertex timelines. Two graphs match if these multisets are identical.
 
 Notes:
-- The algorithm focuses on edges, not degrees. Degrees are implicit in the event flow. Sorting within each iteration uses only hit-rates and event type, which preserves label-invariance.
+- Edge-first view: we operate on gossips (edge events) rather than node degrees. Degrees are implicit in the flow.
+- Frontier iteration: only `new_spreaders` transmit each round, while `spreaders` accumulates all who have ever heard. This avoids re-visiting edges while retaining a global memory of who has heard.
+- Per-round tallies: `gossip_heard_count` resets each round by design. On undirected graphs, long detours aren’t possible: a vertex participates in only two rounds of the process—first as a receiver (when it initially hears), then in the next round as a spreader (it may engage multiple times within that round). Not resetting across rounds could enable obfuscation; we intentionally only count what happens within the current round.
+- Counting rule: receivers never increase the spreader’s tally. A spreader’s `gossip_heard_count` only increases when it contacts other vertices that have already heard in the same round.
 
 ## Current Status
 

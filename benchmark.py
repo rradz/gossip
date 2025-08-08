@@ -50,6 +50,9 @@ from benchmarks.trees import build_cases as build_trees
 from benchmarks.zeta import build_cases as build_zeta
 from benchmarks.er_complexity import build_cases as build_er_complexity
 from benchmarks.legacy_tests import build_cases as build_legacy
+from benchmarks.products import build_cases as build_products
+from benchmarks.transforms import build_cases as build_transforms
+from benchmarks.cages import build_cases as build_cages
 
 import networkx as nx
 from gossip.utils import relabel_graph, generate_cfi_pair, generate_miyazaki_graph, generate_strongly_regular_graph
@@ -90,6 +93,10 @@ def build_symmetry_cases() -> List[Case]:
         ("heawood_graph", "Heawood"),
         ("moebius_kantor_graph", "Möbius–Kantor"),
         ("pappus_graph", "Pappus"),
+        ("tetrahedral_graph", "Tetrahedral"),
+        ("octahedral_graph", "Octahedral"),
+        ("icosahedral_graph", "Icosahedral"),
+        ("cubical_graph", "Cubical"),
     ]:
         if hasattr(nx, gen_name):
             G = getattr(nx, gen_name)()
@@ -140,6 +147,9 @@ def collect_groups(selected: Sequence[str]) -> List[Tuple[str, List[Case]]]:
         "er_complexity": build_er_complexity,
         "hard": build_hard_cases,
         "legacy_tests": build_legacy,
+        "products": build_products,
+        "transforms": build_transforms,
+        "cages": build_cages,
     }
     if not selected:
         names = list(builders.keys())
@@ -190,6 +200,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "er_complexity",
             "hard",
             "legacy_tests",
+            "products",
+            "transforms",
+            "cages",
             "all",
         ]
         print_usage(groups)
@@ -214,6 +227,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "er_complexity",
             "hard",
             "legacy_tests",
+            "products",
+            "transforms",
+            "cages",
             "all",
         ],
         help="Groups to run (default: all)",
