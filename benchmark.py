@@ -49,6 +49,7 @@ from benchmarks.other_families import (
 from benchmarks.trees import build_cases as build_trees
 from benchmarks.zeta import build_cases as build_zeta
 from benchmarks.er_complexity import build_cases as build_er_complexity
+from benchmarks.legacy_tests import build_cases as build_legacy
 
 import networkx as nx
 from gossip.utils import relabel_graph, generate_cfi_pair, generate_miyazaki_graph, generate_strongly_regular_graph
@@ -138,6 +139,7 @@ def collect_groups(selected: Sequence[str]) -> List[Tuple[str, List[Case]]]:
         "zeta": build_zeta,
         "er_complexity": build_er_complexity,
         "hard": build_hard_cases,
+        "legacy_tests": build_legacy,
     }
     if not selected:
         names = list(builders.keys())
@@ -187,6 +189,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "zeta",
             "er_complexity",
             "hard",
+            "legacy_tests",
             "all",
         ]
         print_usage(groups)
@@ -210,6 +213,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "zeta",
             "er_complexity",
             "hard",
+            "legacy_tests",
             "all",
         ],
         help="Groups to run (default: all)",

@@ -10,7 +10,7 @@ The gossip algorithm propagates local information outward ("gossip") from each v
 
 - Deterministic and label-invariant
 - Works on simple undirected graphs (self-loops are tolerated by reducing to a simple graph)
-- Not guaranteed complete; we document known counterexamples
+ - Not proven complete; currently no known counterexamples in our tests/benchmarks (circulants fixed)
 
 ## Current Status
 
@@ -21,9 +21,9 @@ The gossip algorithm propagates local information outward ("gossip") from each v
 - Strongly regular: SRG(16,6,2,2) relabel stability
 - Miyazaki graphs: relabel stability
 - Generalized Petersen (various GP(n,k)) relabel stability
+- Circulants: previously failing pairs now distinguished
 
 ### Known Issues
-- Circulants: specific patterns are a counterexample (e.g., C13([1,3,4]) vs C13([1,3,6]) — algorithm says ISO, NX says NON-ISO)
 - Dense graphs: runtime grows faster (expected; more edges)
 
 ## Requirements
@@ -68,20 +68,14 @@ Each row prints Gossip vs NetworkX, and a “Match” column. “Correct” mean
 
 ### Snapshot (example on a laptop)
 
-- Circulants: 8/9 correct; the C13([1,3,4]) vs C13([1,3,6]) pair is a known mismatch. Observed scaling ~ t ≈ n^2.5 for gossip on the small sizes tested.
+- Circulants: all tested pairs correct; observed scaling ~ t ≈ n^2.5 for gossip on the small sizes tested.
 - Hard CFI: Gossip distinguishes pairs; NetworkX (VF2) is slower on these than gossip at our small sizes.
 
 These are small-scale, unoptimized, and indicative only.
 
 ## Tests
 
-Tests live in `tests/` and cover:
-- Algorithm basics: invariants, standard families, conversions
-- Hard instances: CFI, SRG, Miyazaki, cospectral trees, products
-- Integration and CLI
-- Performance (small sizes to avoid long runs)
-
-If a test becomes redundant with the new modular benchmarks, prefer keeping a minimal sanity version and moving coverage into the `benchmarks/` suite for ongoing evaluation. PRs to simplify/trim redundant tests are welcome.
+We now rely on the modular benchmarks under `benchmarks/` instead of a pytest suite. Groups include `basic`, `symmetry`, `families`, `circulant`, `kneser`, `johnson`, `paley`, `rook_shrikhande`, `gpetersen`, `trees`, `zeta`, `er_complexity`, `hard`, and `legacy_tests` (ported constructions from the old tests, including CFI and sanity pairs). Use filters and timeouts to focus runs.
 
 ## Performance and Complexity (empirical)
 
@@ -111,7 +105,7 @@ gossip/
 
 This is a hobby project. Contributions welcome, especially:
 - Additional benchmark families (suggestions: rook graphs at other sizes, more SRGs, Johnson/Kneser variants)
-- Improvements to the algorithm (addressing circulant mismatch)
+- Stress tests and adversarial families (help search for counterexamples)
 - Profiling and performance improvements
 
 ## License

@@ -22,7 +22,7 @@ def build_cases() -> List[Case]:
         G = generate_circulant_graph(n, conn)
         cases.append(Case("circulant", f"Circulant {label} — relabel", G, relabel_graph(G, seed=n), True))
 
-    # Known tricky non-isomorphic pair (README)
+    # Previously tricky non-isomorphic pair (kept for sanity)
     A = generate_circulant_graph(13, [1, 3, 4])
     B = generate_circulant_graph(13, [1, 3, 6])
     cases.append(Case("circulant", "Circulant C13[1,3,4] vs C13[1,3,6]", A, B, None))
