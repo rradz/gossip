@@ -46,7 +46,7 @@ class GossipFingerprint:
         self,
         adjacency: Dict[Any, List[Any]],
         start_vertex: Any
-    ) -> Tuple[int, List[Tuple[int, int, int, int]]]:
+    ):
         """
         Compute fingerprint for a single starting vertex.
 
@@ -66,45 +66,45 @@ class GossipFingerprint:
         while new_knowers:
             next_new_knowers = set()
 
+            # Collect transmissions and hit counts in a single pass
+            transmissions = []
+            hit_rate = {}
             for current_knower in knowers:
                 for neighbor in adjacency[current_knower]:
                     edge = tuple(sorted((current_knower, neighbor)))
-
                     if edge in seen_edges:
                         continue
                     seen_edges.add(edge)
+                    transmissions.append((current_knower, neighbor))
+                    hit_rate[current_knower] = hit_rate.get(current_knower, 0)
+                    if neighbor in knowers:
+                        hit_rate[current_knower] += 1
+                    hit_rate[neighbor] = hit_rate.get(neighbor, 0) + 1
 
-                    current_knows = current_knower in knowers
-                    neighbor_knows = neighbor in knowers
-                    current_degree = len(adjacency[current_knower])
-                    neighbor_degree = len(adjacency[neighbor])
+            # Emit events using hit rates (no degrees)
+            for current_knower, neighbor in transmissions:
+                current_knows = current_knower in knowers
+                neighbor_knows = neighbor in knowers
 
-                    if current_knows and not neighbor_knows:
-                        # Current spreads to neighbor
-                        timeline.append((iteration, current_degree, 1, neighbor_degree))
-                        next_new_knowers.add(neighbor)
-                    elif neighbor_knows and not current_knows:
-                        # Neighbor spreads to current
-                        timeline.append((iteration, neighbor_degree, 1, current_degree))
-                        next_new_knowers.add(current_knower)
+                if current_knows and not neighbor_knows:
+                    timeline.append((iteration, 1, hit_rate[current_knower], hit_rate[neighbor]))
+                    next_new_knowers.add(neighbor)
+                elif neighbor_knows and not current_knows:
+                    timeline.append((iteration, 1, hit_rate[neighbor], hit_rate[current_knower]))
+                    next_new_knowers.add(current_knower)
+                else:
+                    a = hit_rate[current_knower]
+                    b = hit_rate[neighbor]
+                    if a <= b:
+                        timeline.append((iteration, 0, a, b))
                     else:
-                        # Both know or both don't know
-                        if current_degree <= neighbor_degree:
-                            spreader, listener = current_knower, neighbor
-                        else:
-                            spreader, listener = neighbor, current_knower
-                        timeline.append((
-                            iteration,
-                            len(adjacency[spreader]),
-                            0,
-                            len(adjacency[listener])
-                        ))
+                        timeline.append((iteration, 0, b, a))
 
             knowers = new_knowers | next_new_knowers
             new_knowers = next_new_knowers
             iteration += 1
 
-        return (len(adjacency[start_vertex]), tuple(sorted(timeline)))
+        return tuple(sorted(timeline))
 
     def compare(self, G1: nx.Graph, G2: nx.Graph) -> bool:
         """
